@@ -6,6 +6,7 @@ import {VitePWA} from 'vite-plugin-pwa';
 
 export default defineConfig(() => {
   return {
+    base: '/printcheque/',
     plugins: [
       react(),
       tailwindcss(),
@@ -13,15 +14,15 @@ export default defineConfig(() => {
         registerType: 'autoUpdate',
         includeAssets: ['icon.svg'],
         manifest: {
-          id: '/',
+         id: '/printcheque/',
           name: 'Office Cheque Manager - Nepal',
           short_name: 'ChequeMgr',
           description: 'Physical cheque printing and management application for accounting offices in Nepal',
           theme_color: '#0f172a',
           background_color: '#f8fafc',
           display: 'standalone',
-          start_url: '/',
-          scope: '/',
+          start_url: '/printcheque/',
+          scope: '/printcheque/',
           icons: [
             {
               src: '/icon.svg',

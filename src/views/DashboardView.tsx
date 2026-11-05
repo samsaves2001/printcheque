@@ -210,7 +210,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                           {formatDisplayDate(chk.chequeDate)}
                         </td>
                         <td className="py-3 px-4 font-mono font-semibold text-slate-800 whitespace-nowrap">
-                          {chk.chequeNumber}
+                          {chk.chequeNumber ? chk.chequeNumber : <span className="text-slate-400 font-normal">—</span>}
                         </td>
                         <td className="py-3 px-4 whitespace-nowrap">
                           <span className="text-slate-700">{bank?.shortName || 'Bank'}</span>

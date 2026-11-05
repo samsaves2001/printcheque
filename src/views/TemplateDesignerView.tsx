@@ -704,6 +704,39 @@ export const TemplateDesignerView: React.FC<TemplateDesignerViewProps> = ({
                 {selectedFieldKey === 'acPayeeCrossing' && (
                   <div className="space-y-3 pt-2 border-t border-slate-100">
                     <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1.5">
+                        Quick Position Presets
+                      </label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const midX = Math.max(0, parseFloat(((currentBank.widthMm - 42.0) / 2).toFixed(1)));
+                            handleFieldChange('acPayeeCrossing', 'x', midX);
+                            handleFieldChange('acPayeeCrossing', 'y', 4.5);
+                            handleFieldChange('acPayeeCrossing', 'width', 42.0);
+                            handleFieldChange('acPayeeCrossing', 'style' as any, 'horizontal');
+                          }}
+                          className="px-2 py-1.5 bg-slate-900 text-white rounded text-xs font-semibold hover:bg-slate-800 transition-colors cursor-pointer text-center"
+                        >
+                          Top Middle (Centered)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleFieldChange('acPayeeCrossing', 'x', 12.0);
+                            handleFieldChange('acPayeeCrossing', 'y', 7.0);
+                            handleFieldChange('acPayeeCrossing', 'width', 38.0);
+                            handleFieldChange('acPayeeCrossing', 'style' as any, 'diagonal');
+                          }}
+                          className="px-2 py-1.5 bg-white border border-slate-300 text-slate-700 rounded text-xs font-semibold hover:bg-slate-50 transition-colors cursor-pointer text-center"
+                        >
+                          Top Left (Corner)
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
                       <label className="block text-[11px] font-semibold text-slate-700 mb-1">
                         Text Between Parallel Lines
                       </label>
@@ -714,7 +747,7 @@ export const TemplateDesignerView: React.FC<TemplateDesignerViewProps> = ({
                           handleFieldChange(selectedFieldKey, 'label' as any, e.target.value)
                         }
                         placeholder="A/C PAYEE"
-                        className="w-full text-xs font-bold bg-white border border-slate-300 rounded px-2.5 py-1.5 text-slate-900"
+                        className="w-full text-xs font-bold bg-white border border-slate-300 rounded px-2.5 py-1.5 text-slate-900 tracking-wider text-center"
                       />
                     </div>
                     <div>
@@ -722,14 +755,14 @@ export const TemplateDesignerView: React.FC<TemplateDesignerViewProps> = ({
                         Parallel Lines Angle / Style
                       </label>
                       <select
-                        value={(activeField as any).style || 'diagonal'}
+                        value={(activeField as any).style || 'horizontal'}
                         onChange={(e) =>
                           handleFieldChange(selectedFieldKey, 'style' as any, e.target.value)
                         }
                         className="w-full text-xs bg-white border border-slate-300 rounded px-2 py-1.5 text-slate-800"
                       >
-                        <option value="diagonal">Diagonal Parallel Lines (-30° angle)</option>
-                        <option value="horizontal">Horizontal Parallel Lines (0° angle)</option>
+                        <option value="horizontal">Horizontal Parallel Lines (Top Middle / 0° angle)</option>
+                        <option value="diagonal">Diagonal Parallel Lines (Corner / -30° angle)</option>
                       </select>
                     </div>
                   </div>

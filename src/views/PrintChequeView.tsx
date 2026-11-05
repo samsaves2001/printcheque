@@ -136,6 +136,73 @@ export const PrintChequeView: React.FC<PrintChequeViewProps> = ({
     return bankTemplates.find((t) => t.id === selectedTemplateId) || bankTemplates[0];
   }, [bankTemplates, selectedTemplateId]);
 
+  // Adjustable AC Payee Crossing placement options (Top Middle by default)
+  const [acPayeePosition, setAcPayeePosition] = useState<'top-middle' | 'top-left' | 'custom'>('top-middle');
+  const [acPayeeCustomX, setAcPayeeCustomX] = useState<number>(80.5);
+  const [acPayeeCustomY, setAcPayeeCustomY] = useState<number>(4.5);
+  const [acPayeeCustomWidth, setAcPayeeCustomWidth] = useState<number>(42.0);
+  const [acPayeeCustomStyle, setAcPayeeCustomStyle] = useState<'horizontal' | 'diagonal'>('horizontal');
+  const [acPayeeCustomLabel, setAcPayeeCustomLabel] = useState<string>('A/C PAYEE');
+
+  // Sync AC Payee controls whenever bank or template changes
+  useEffect(() => {
+    if (currentTemplate?.fields?.acPayeeCrossing) {
+      const c = currentTemplate.fields.acPayeeCrossing;
+      setAcPayeeCustomX(c.x);
+      setAcPayeeCustomY(c.y);
+      setAcPayeeCustomWidth(c.width || 42.0);
+      setAcPayeeCustomStyle(c.style || 'horizontal');
+      setAcPayeeCustomLabel(c.label || 'A/C PAYEE');
+
+      const bankWidth = currentBank?.widthMm || 203;
+      const midExpectedX = (bankWidth - (c.width || 42.0)) / 2;
+      if (c.style === 'diagonal' || c.x < 35) {
+        setAcPayeePosition('top-left');
+      } else if (Math.abs(c.x - midExpectedX) < 6) {
+        setAcPayeePosition('top-middle');
+      } else {
+        setAcPayeePosition('custom');
+      }
+    }
+  }, [currentTemplate?.id, currentBank?.widthMm]);
+
+  // Compute effective template with real-time AC Payee coordinates
+  const effectiveTemplate = useMemo(() => {
+    if (!currentTemplate) return null;
+    const cloned = JSON.parse(JSON.stringify(currentTemplate)) as ChequeTemplate;
+    if (cloned.fields?.acPayeeCrossing) {
+      const bankWidth = currentBank?.widthMm || 203;
+      if (acPayeePosition === 'top-middle') {
+        const midX = Math.max(0, parseFloat(((bankWidth - 42.0) / 2).toFixed(1)));
+        cloned.fields.acPayeeCrossing.x = midX;
+        cloned.fields.acPayeeCrossing.y = 4.5;
+        cloned.fields.acPayeeCrossing.width = 42.0;
+        cloned.fields.acPayeeCrossing.style = 'horizontal';
+      } else if (acPayeePosition === 'top-left') {
+        cloned.fields.acPayeeCrossing.x = 12.0;
+        cloned.fields.acPayeeCrossing.y = 7.0;
+        cloned.fields.acPayeeCrossing.width = 38.0;
+        cloned.fields.acPayeeCrossing.style = 'diagonal';
+      } else {
+        cloned.fields.acPayeeCrossing.x = acPayeeCustomX;
+        cloned.fields.acPayeeCrossing.y = acPayeeCustomY;
+        cloned.fields.acPayeeCrossing.width = acPayeeCustomWidth;
+        cloned.fields.acPayeeCrossing.style = acPayeeCustomStyle;
+      }
+      cloned.fields.acPayeeCrossing.label = acPayeeCustomLabel;
+    }
+    return cloned;
+  }, [
+    currentTemplate,
+    currentBank?.widthMm,
+    acPayeePosition,
+    acPayeeCustomX,
+    acPayeeCustomY,
+    acPayeeCustomWidth,
+    acPayeeCustomStyle,
+    acPayeeCustomLabel,
+  ]);
+
   const currentCalibration = useMemo(() => {
     if (!selectedCalibrationId) return null;
     return calibrations.find((c) => c.id === selectedCalibrationId) || null;
@@ -244,7 +311,7 @@ export const PrintChequeView: React.FC<PrintChequeViewProps> = ({
     const num = parseFloat(rawAmount) || 0;
     return {
       bankId: selectedBankId,
-      templateId: currentTemplate?.id || '',
+      templateId: effectiveTemplate?.id || '',
       chequeNumber: chequeNumber.trim(),
       payeeName: payeeName.trim(),
       payeeId: selectedPayeeId || undefined,
@@ -259,7 +326,7 @@ export const PrintChequeView: React.FC<PrintChequeViewProps> = ({
     };
   }, [
     selectedBankId,
-    currentTemplate,
+    effectiveTemplate,
     chequeNumber,
     payeeName,
     selectedPayeeId,
@@ -277,7 +344,7 @@ export const PrintChequeView: React.FC<PrintChequeViewProps> = ({
       setValidationError('Please select a bank.');
       return false;
     }
-    if (!currentTemplate) {
+    if (!effectiveTemplate) {
       setValidationError('Please select a cheque template for this bank.');
       return false;
     }
@@ -307,7 +374,7 @@ export const PrintChequeView: React.FC<PrintChequeViewProps> = ({
   // Execute Print
   const handlePrint = async () => {
     if (!validate()) return;
-    if (!currentBank || !currentTemplate) return;
+    if (!currentBank || !effectiveTemplate) return;
 
     const num = parseFloat(rawAmount);
     const now = new Date().toISOString();
@@ -315,7 +382,7 @@ export const PrintChequeView: React.FC<PrintChequeViewProps> = ({
     const record: ChequeRecord = {
       id: reprintCheque?.id || `chk-${Date.now()}`,
       bankId: currentBank.id,
-      templateId: currentTemplate.id,
+      templateId: effectiveTemplate.id,
       chequeNumber: chequeNumber.trim(),
       payeeName: payeeName.trim(),
       payeeId: selectedPayeeId || undefined,
@@ -333,13 +400,13 @@ export const PrintChequeView: React.FC<PrintChequeViewProps> = ({
       updatedAt: now,
     };
 
-    onPrintCheque(currentBank, currentTemplate, record, currentCalibration);
+    onPrintCheque(currentBank, effectiveTemplate, record, currentCalibration);
   };
 
   // Save as Draft
   const handleSaveDraft = async () => {
     if (!validate()) return;
-    if (!currentBank || !currentTemplate) return;
+    if (!currentBank || !effectiveTemplate) return;
 
     const num = parseFloat(rawAmount);
     const now = new Date().toISOString();
@@ -347,7 +414,7 @@ export const PrintChequeView: React.FC<PrintChequeViewProps> = ({
     const record: ChequeRecord = {
       id: reprintCheque?.id || `chk-${Date.now()}`,
       bankId: currentBank.id,
-      templateId: currentTemplate.id,
+      templateId: effectiveTemplate.id,
       chequeNumber: chequeNumber.trim(),
       payeeName: payeeName.trim(),
       payeeId: selectedPayeeId || undefined,
@@ -462,6 +529,23 @@ export const PrintChequeView: React.FC<PrintChequeViewProps> = ({
             <span>Print Cheque Leaf</span>
           </button>
         </div>
+      </div>
+
+      {/* Physical Printer Zero-Darkening & No-Headers Checklist Reminder */}
+      <div className="p-3.5 bg-blue-50/70 border border-blue-200/80 rounded-xl flex items-start justify-between gap-3 text-xs text-blue-950">
+        <div className="flex items-start gap-2.5">
+          <Printer className="w-4 h-4 text-blue-700 shrink-0 mt-0.5" />
+          <div className="leading-relaxed">
+            <span className="font-bold text-blue-900">Physical Printer Checklist:</span> In Chrome's print popup, set <strong className="underline">Margins: None</strong>, and uncheck <strong className="underline">Headers and footers</strong> (removes URL, page 1/1, and date) and <strong className="underline">Background graphics</strong> (ensures pure black ink text with zero background darkening).
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => setShowPrinterGuideModal(true)}
+          className="text-blue-700 underline font-bold whitespace-nowrap hover:text-blue-900 cursor-pointer text-[11px] shrink-0"
+        >
+          Printer Guide
+        </button>
       </div>
 
       {/* Validation or Duplicate Alerts */}
@@ -708,20 +792,136 @@ export const PrintChequeView: React.FC<PrintChequeViewProps> = ({
           </div>
 
           {/* Cheque Protections (A/C Payee Only & Strike Bearer) */}
-          <div className="pt-2 border-t border-slate-100 space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={isAcPayeeOnly}
-                  onChange={(e) => setIsAcPayeeOnly(e.target.checked)}
-                  className="w-4 h-4 rounded text-slate-900 border-slate-300 focus:ring-slate-900"
-                />
-                <span className="text-xs font-bold text-slate-800">
-                  Mark "A/C PAYEE" (Between 2 Parallel Lines)
+          <div className="pt-2 border-t border-slate-100 space-y-3">
+            <div>
+              <div className="flex items-center justify-between">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={isAcPayeeOnly}
+                    onChange={(e) => setIsAcPayeeOnly(e.target.checked)}
+                    className="w-4 h-4 rounded text-slate-900 border-slate-300 focus:ring-slate-900"
+                  />
+                  <span className="text-xs font-bold text-slate-800">
+                    Mark "A/C PAYEE" (Between 2 Parallel Lines)
+                  </span>
+                </label>
+                <span className="text-[10px] text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded font-semibold border border-emerald-200">
+                  {acPayeePosition === 'top-middle'
+                    ? 'Top Middle (Centered)'
+                    : acPayeePosition === 'top-left'
+                    ? 'Top Left (Corner)'
+                    : 'Custom mm Offset'}
                 </span>
-              </label>
-              <span className="text-[10px] text-slate-500 font-mono">2 Parallel lines at top-left</span>
+              </div>
+
+              {/* Position & Style Controls when AC Payee is enabled */}
+              {isAcPayeeOnly && (
+                <div className="mt-2.5 ml-6 p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-2.5 text-xs">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <span className="font-semibold text-slate-700 text-[11px]">Position on Cheque:</span>
+                    <div className="inline-flex rounded-md shadow-2xs bg-white p-0.5 border border-slate-200">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAcPayeePosition('top-middle');
+                          setAcPayeeCustomStyle('horizontal');
+                        }}
+                        className={`px-2.5 py-1 text-[11px] font-semibold rounded cursor-pointer transition-colors ${
+                          acPayeePosition === 'top-middle'
+                            ? 'bg-slate-900 text-white'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        Top Middle (Standard)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAcPayeePosition('top-left');
+                          setAcPayeeCustomStyle('diagonal');
+                        }}
+                        className={`px-2.5 py-1 text-[11px] font-semibold rounded cursor-pointer transition-colors ${
+                          acPayeePosition === 'top-left'
+                            ? 'bg-slate-900 text-white'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        Top Left (Corner)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAcPayeePosition('custom')}
+                        className={`px-2.5 py-1 text-[11px] font-semibold rounded cursor-pointer transition-colors ${
+                          acPayeePosition === 'custom'
+                            ? 'bg-slate-900 text-white'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        Fine-tune (mm)
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* If custom or fine-tuning, show numeric adjusters */}
+                  {acPayeePosition === 'custom' && (
+                    <div className="grid grid-cols-4 gap-2 pt-1 border-t border-slate-200">
+                      <div>
+                        <label className="block text-[10px] font-medium text-slate-500 mb-0.5">X (mm)</label>
+                        <input
+                          type="number"
+                          step="0.5"
+                          value={acPayeeCustomX}
+                          onChange={(e) => setAcPayeeCustomX(parseFloat(e.target.value) || 0)}
+                          className="w-full text-xs font-mono font-semibold bg-white border border-slate-300 rounded px-1.5 py-1 text-slate-800"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-medium text-slate-500 mb-0.5">Y (mm)</label>
+                        <input
+                          type="number"
+                          step="0.5"
+                          value={acPayeeCustomY}
+                          onChange={(e) => setAcPayeeCustomY(parseFloat(e.target.value) || 0)}
+                          className="w-full text-xs font-mono font-semibold bg-white border border-slate-300 rounded px-1.5 py-1 text-slate-800"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-medium text-slate-500 mb-0.5">Width (mm)</label>
+                        <input
+                          type="number"
+                          step="1"
+                          value={acPayeeCustomWidth}
+                          onChange={(e) => setAcPayeeCustomWidth(parseFloat(e.target.value) || 20)}
+                          className="w-full text-xs font-mono font-semibold bg-white border border-slate-300 rounded px-1.5 py-1 text-slate-800"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-medium text-slate-500 mb-0.5">Style</label>
+                        <select
+                          value={acPayeeCustomStyle}
+                          onChange={(e) => setAcPayeeCustomStyle(e.target.value as any)}
+                          className="w-full text-xs bg-white border border-slate-300 rounded px-1 py-1 text-slate-800"
+                        >
+                          <option value="horizontal">Horizontal</option>
+                          <option value="diagonal">Diagonal (-30°)</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between text-[11px] text-slate-600 pt-1 border-t border-slate-200/80">
+                    <span className="font-medium">Crossing Text:</span>
+                    <input
+                      type="text"
+                      value={acPayeeCustomLabel}
+                      onChange={(e) => setAcPayeeCustomLabel(e.target.value)}
+                      placeholder="A/C PAYEE"
+                      className="w-44 text-xs font-bold text-slate-800 uppercase bg-white border border-slate-300 rounded px-2 py-0.5 font-mono text-center tracking-wider"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="flex items-center justify-between">
@@ -890,10 +1090,10 @@ export const PrintChequeView: React.FC<PrintChequeViewProps> = ({
             ref={previewContainerRef}
             className="flex-1 bg-slate-100/70 rounded-xl p-3 sm:p-5 flex items-center justify-center overflow-x-auto min-h-[250px] border border-slate-200/70 shadow-inner"
           >
-            {currentBank && currentTemplate ? (
+            {currentBank && effectiveTemplate ? (
               <ChequePreview
                 bank={currentBank}
-                template={currentTemplate}
+                template={effectiveTemplate}
                 cheque={currentChequeData}
                 calibration={currentCalibration}
                 zoom={zoom}

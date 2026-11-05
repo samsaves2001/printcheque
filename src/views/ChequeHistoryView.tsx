@@ -308,7 +308,7 @@ export const ChequeHistoryView: React.FC<ChequeHistoryViewProps> = ({
                         {formatDisplayDate(chk.chequeDate)}
                       </td>
                       <td className="py-3 px-4 font-mono font-bold text-slate-900 whitespace-nowrap">
-                        {chk.chequeNumber}
+                        {chk.chequeNumber ? chk.chequeNumber : <span className="text-slate-400 font-normal">—</span>}
                       </td>
                       <td className="py-3 px-4 whitespace-nowrap">
                         <div className="flex items-center gap-1.5">
@@ -449,7 +449,7 @@ export const ChequeHistoryView: React.FC<ChequeHistoryViewProps> = ({
                   Cheque Record Details
                 </span>
                 <h3 className="text-base font-bold text-slate-900">
-                  Cheque #{selectedDetailCheque.chequeNumber}
+                  {selectedDetailCheque.chequeNumber ? `Cheque #${selectedDetailCheque.chequeNumber}` : 'Cheque (Unnumbered)'}
                 </h3>
               </div>
               <button

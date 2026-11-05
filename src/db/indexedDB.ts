@@ -79,18 +79,19 @@ export class ChequeDatabase {
   private async seedDefaultsIfEmpty(db: IDBDatabase): Promise<void> {
     const tx = db.transaction(['banks', 'templates', 'payees', 'calibrations', 'settings', 'cheques'], 'readwrite');
     const banksStore = tx.objectStore('banks');
+    const chqStore = tx.objectStore('cheques');
+    const payeeStore = tx.objectStore('payees');
     const countReq = banksStore.count();
 
     return new Promise((resolve) => {
       countReq.onsuccess = () => {
         if (countReq.result === 0) {
-          // Empty DB, seed defaults
+          // Empty DB, seed defaults (banks, templates, calibrations, settings only; zero demo cheques/payees)
           DEFAULT_BANKS.forEach((b) => banksStore.put(b));
 
           const tmplStore = tx.objectStore('templates');
           DEFAULT_TEMPLATES.forEach((t) => tmplStore.put(t));
 
-          const payeeStore = tx.objectStore('payees');
           DEFAULT_PAYEES.forEach((p) => payeeStore.put(p));
 
           const calibStore = tx.objectStore('calibrations');
@@ -99,8 +100,34 @@ export class ChequeDatabase {
           const settingsStore = tx.objectStore('settings');
           settingsStore.put({ key: 'appSettings', value: DEFAULT_SETTINGS });
 
-          const chqStore = tx.objectStore('cheques');
           INITIAL_CHEQUES.forEach((chk) => chqStore.put(chk));
+        } else {
+          // Fresh start migration: purge any previous demo cheques and demo payees
+          const demoChequeIds = ['chk-1001', 'chk-1002', 'chk-1003', 'chk-1004'];
+          demoChequeIds.forEach((id) => chqStore.delete(id));
+
+          const demoPayeeIds = [
+            'payee-nea',
+            'payee-ird',
+            'payee-ntc',
+            'payee-kantipur',
+            'payee-shrestha',
+            'payee-bhatbhateni',
+          ];
+          demoPayeeIds.forEach((id) => payeeStore.delete(id));
+
+          // Clean demo account names from existing banks
+          const allBanksReq = banksStore.getAll();
+          allBanksReq.onsuccess = () => {
+            const list: BankConfig[] = allBanksReq.result || [];
+            list.forEach((b) => {
+              if (b.accountHolderName === 'Apex Accounting Services Pvt. Ltd.') {
+                b.accountHolderName = '';
+                b.accountNumber = '';
+                banksStore.put(b);
+              }
+            });
+          };
         }
         resolve();
       };
@@ -299,6 +326,7 @@ export class ChequeDatabase {
   }
 
   async checkDuplicateCheque(bankId: string, chequeNumber: string, excludeId?: string): Promise<ChequeRecord | null> {
+    if (!chequeNumber || !chequeNumber.trim()) return null;
     const db = await this.openDB();
     return new Promise((resolve, reject) => {
       const tx = db.transaction('cheques', 'readonly');
@@ -307,8 +335,12 @@ export class ChequeDatabase {
       req.onsuccess = () => {
         const cheques: ChequeRecord[] = req.result || [];
         const cleanNo = chequeNumber.trim().toLowerCase();
+        if (!cleanNo) {
+          resolve(null);
+          return;
+        }
         const found = cheques.find(
-          (c) => c.bankId === bankId && c.chequeNumber.trim().toLowerCase() === cleanNo && c.id !== excludeId
+          (c) => c.bankId === bankId && c.chequeNumber && c.chequeNumber.trim().toLowerCase() === cleanNo && c.id !== excludeId
         );
         resolve(found || null);
       };
@@ -348,6 +380,17 @@ export class ChequeDatabase {
       const tx = db.transaction('cheques', 'readwrite');
       const store = tx.objectStore('cheques');
       const req = store.delete(id);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  async clearAllCheques(): Promise<void> {
+    const db = await this.openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('cheques', 'readwrite');
+      const store = tx.objectStore('cheques');
+      const req = store.clear();
       req.onsuccess = () => resolve();
       req.onerror = () => reject(req.error);
     });

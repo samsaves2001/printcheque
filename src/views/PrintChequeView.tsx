@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Printer,
   RotateCcw,
@@ -82,9 +82,25 @@ export const PrintChequeView: React.FC<PrintChequeViewProps> = ({
 
   // Preview options
   const [zoom, setZoom] = useState<number>(settings.previewZoom || 100);
+  const [isAutoFit, setIsAutoFit] = useState<boolean>(true); // Default true: entire cheque fits without scrolling
+  const [containerWidth, setContainerWidth] = useState<number>(640);
+  const previewContainerRef = useRef<HTMLDivElement>(null);
   const [showBackground, setShowBackground] = useState<boolean>(true);
   const [showRulers, setShowRulers] = useState<boolean>(false);
   const [showGrid, setShowGrid] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!previewContainerRef.current) return;
+    const updateSize = () => {
+      if (previewContainerRef.current) {
+        setContainerWidth(previewContainerRef.current.clientWidth);
+      }
+    };
+    updateSize();
+    const observer = new ResizeObserver(updateSize);
+    observer.observe(previewContainerRef.current);
+    return () => observer.disconnect();
+  }, []);
 
   // Status & Validation
   const [duplicateWarning, setDuplicateWarning] = useState<ChequeRecord | null>(null);
@@ -139,7 +155,7 @@ export const PrintChequeView: React.FC<PrintChequeViewProps> = ({
     if (reprintCheque) {
       setSelectedBankId(reprintCheque.bankId);
       setSelectedTemplateId(reprintCheque.templateId);
-      setChequeNumber(reprintCheque.chequeNumber);
+      setChequeNumber(reprintCheque.chequeNumber || '');
       setPayeeName(reprintCheque.payeeName);
       setSelectedPayeeId(reprintCheque.payeeId || '');
       setRawAmount(reprintCheque.amount.toString());
@@ -164,7 +180,7 @@ export const PrintChequeView: React.FC<PrintChequeViewProps> = ({
     }
   }, [rawAmount, isManualWordsEdited]);
 
-  // Check duplicate cheque number when bank or cheque number changes
+  // Check duplicate cheque number when bank or cheque number changes (only if chequeNumber provided)
   useEffect(() => {
     if (!chequeNumber.trim() || !selectedBankId) {
       setDuplicateWarning(null);
@@ -223,19 +239,19 @@ export const PrintChequeView: React.FC<PrintChequeViewProps> = ({
     setDuplicateWarning(null);
   };
 
-  // Build cheque object for preview and execution
+  // Build cheque object for preview and execution: NO fake demo defaults
   const currentChequeData: Partial<ChequeRecord> = useMemo(() => {
     const num = parseFloat(rawAmount) || 0;
     return {
       bankId: selectedBankId,
       templateId: currentTemplate?.id || '',
-      chequeNumber: chequeNumber || '00481925',
-      payeeName: payeeName || 'Enter Payee Name',
+      chequeNumber: chequeNumber.trim(),
+      payeeName: payeeName.trim(),
       payeeId: selectedPayeeId || undefined,
       amount: num,
-      amountInWords: amountInWords || (num > 0 ? amountToNepaliWords(num) : 'Amount in words will appear here'),
+      amountInWords: amountInWords.trim() || (num > 0 ? amountToNepaliWords(num) : ''),
       chequeDate: chequeDate,
-      memo: memo,
+      memo: memo.trim(),
       isAcPayeeOnly: isAcPayeeOnly,
       strikeBearer: strikeBearer,
       status: 'Draft',
@@ -255,7 +271,7 @@ export const PrintChequeView: React.FC<PrintChequeViewProps> = ({
     strikeBearer,
   ]);
 
-  // Validate form
+  // Validate form - Cheque number is deliberately NOT mandatory
   const validate = (): boolean => {
     if (!selectedBankId || !currentBank) {
       setValidationError('Please select a bank.');
@@ -265,10 +281,7 @@ export const PrintChequeView: React.FC<PrintChequeViewProps> = ({
       setValidationError('Please select a cheque template for this bank.');
       return false;
     }
-    if (!chequeNumber.trim()) {
-      setValidationError('Cheque number is required.');
-      return false;
-    }
+    // Cheque number is optional!
     if (!payeeName.trim()) {
       setValidationError('Payee name is required.');
       return false;
@@ -526,11 +539,11 @@ export const PrintChequeView: React.FC<PrintChequeViewProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Cheque Number <span className="text-rose-500">*</span>
+                Cheque Number <span className="text-slate-400 font-normal">(Optional)</span>
               </label>
               <input
                 type="text"
-                placeholder="e.g. 00481925"
+                placeholder="e.g. 00481925 (optional)"
                 value={chequeNumber}
                 onChange={(e) => setChequeNumber(e.target.value)}
                 className={`w-full text-xs font-mono font-bold border rounded-lg px-2.5 py-2 text-slate-900 focus:outline-none focus:ring-2 ${
@@ -759,9 +772,9 @@ export const PrintChequeView: React.FC<PrintChequeViewProps> = ({
         </div>
 
         {/* Right Column: Live Cheque Preview Canvas */}
-        <div className="xl:col-span-7 bg-white rounded-xl border border-slate-200 p-5 shadow-xs flex flex-col">
+        <div className="xl:col-span-7 bg-white rounded-xl border border-slate-200 p-5 shadow-xs flex flex-col xl:sticky xl:top-4">
           {/* Preview Toolbar */}
-          <div className="flex flex-wrap items-center justify-between gap-3 pb-4 mb-4 border-b border-slate-100 text-xs">
+          <div className="flex flex-wrap items-center justify-between gap-2.5 pb-3.5 mb-3.5 border-b border-slate-100 text-xs">
             <div className="flex items-center gap-2">
               <Eye className="w-4 h-4 text-slate-600" />
               <span className="font-bold text-slate-900">Physical Cheque Live Preview</span>
@@ -770,18 +783,51 @@ export const PrintChequeView: React.FC<PrintChequeViewProps> = ({
               </span>
             </div>
 
-            {/* Controls: Zoom, Realistic vs Print Overlay, Rulers, Grid */}
-            <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-lg">
+            {/* Controls: Fit to View, 100% Zoom, Realistic vs Ink, Rulers, Grid */}
+            <div className="flex items-center flex-wrap gap-1.5 bg-slate-100 p-1 rounded-lg">
+              {/* Auto-Fit Entire Cheque Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsAutoFit(true);
+                }}
+                className={`px-2.5 py-1 rounded text-xs font-semibold transition-colors cursor-pointer ${
+                  isAutoFit
+                    ? 'bg-slate-900 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+                title="Fit entire cheque in view without scrolling"
+              >
+                Fit Entire Cheque
+              </button>
+
+              {/* 100% Actual Physical Size Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsAutoFit(false);
+                  setZoom(100);
+                }}
+                className={`px-2 py-1 rounded text-xs font-medium transition-colors cursor-pointer ${
+                  !isAutoFit && zoom === 100
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+                title="View in 100% 1:1 physical millimeter scale"
+              >
+                100% (1:1)
+              </button>
+
               {/* Toggle Realistic Cheque Leaf Background */}
               <button
                 type="button"
                 onClick={() => setShowBackground(!showBackground)}
-                className={`px-2.5 py-1 rounded text-xs font-medium transition-colors cursor-pointer ${
+                className={`px-2 py-1 rounded text-xs font-medium transition-colors cursor-pointer ${
                   showBackground ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
                 }`}
                 title="Toggle Cheque Background vs Print-Only View"
               >
-                {showBackground ? 'Realistic Leaf' : 'Print Ink Only'}
+                {showBackground ? 'Realistic Leaf' : 'Ink Only'}
               </button>
 
               {/* Toggle Rulers */}
@@ -808,39 +854,42 @@ export const PrintChequeView: React.FC<PrintChequeViewProps> = ({
                 <Grid className="w-3.5 h-3.5" />
               </button>
 
-              {/* Zoom Buttons */}
-              <div className="flex items-center border-l border-slate-200 pl-1.5 ml-1">
+              {/* Zoom Out / In */}
+              <div className="flex items-center border-l border-slate-200 pl-1 ml-0.5">
                 <button
                   type="button"
-                  onClick={() => setZoom((z) => Math.max(50, z - 15))}
+                  onClick={() => {
+                    setIsAutoFit(false);
+                    setZoom((z) => Math.max(40, z - 10));
+                  }}
                   className="p-1 text-slate-600 hover:text-slate-900 cursor-pointer"
                   title="Zoom Out"
                 >
                   <ZoomOut className="w-3.5 h-3.5" />
                 </button>
-                <span className="font-mono text-[11px] px-1 text-slate-600">{zoom}%</span>
+                <span className="font-mono text-[10px] px-1 text-slate-600">
+                  {isAutoFit ? 'Auto' : `${zoom}%`}
+                </span>
                 <button
                   type="button"
-                  onClick={() => setZoom((z) => Math.min(160, z + 15))}
+                  onClick={() => {
+                    setIsAutoFit(false);
+                    setZoom((z) => Math.min(150, z + 10));
+                  }}
                   className="p-1 text-slate-600 hover:text-slate-900 cursor-pointer"
                   title="Zoom In"
                 >
                   <ZoomIn className="w-3.5 h-3.5" />
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setZoom(100)}
-                  className="p-1 text-slate-600 hover:text-slate-900 cursor-pointer"
-                  title="Reset to 100%"
-                >
-                  <Maximize2 className="w-3 h-3" />
-                </button>
               </div>
             </div>
           </div>
 
-          {/* Interactive Cheque Canvas */}
-          <div className="flex-1 bg-slate-50/70 rounded-lg p-6 flex items-center justify-center overflow-auto min-h-[380px] border border-slate-200/60">
+          {/* Interactive Cheque Canvas with Ref for Auto-Fit */}
+          <div
+            ref={previewContainerRef}
+            className="flex-1 bg-slate-100/70 rounded-xl p-3 sm:p-5 flex items-center justify-center overflow-x-auto min-h-[250px] border border-slate-200/70 shadow-inner"
+          >
             {currentBank && currentTemplate ? (
               <ChequePreview
                 bank={currentBank}
@@ -848,6 +897,8 @@ export const PrintChequeView: React.FC<PrintChequeViewProps> = ({
                 cheque={currentChequeData}
                 calibration={currentCalibration}
                 zoom={zoom}
+                autoFit={isAutoFit}
+                containerWidth={containerWidth}
                 showBackground={showBackground}
                 showRulers={showRulers}
                 showGrid={showGrid}

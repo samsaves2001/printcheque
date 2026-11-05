@@ -33,17 +33,65 @@ export const PhysicalPrintStage: React.FC<PhysicalPrintStageProps> = ({ printDat
     }
 
     styleEl.innerHTML = `
+      @page {
+        size: ${pageWidth}mm ${pageHeight}mm;
+        margin: 0mm !important;
+      }
+      @page :first {
+        size: ${pageWidth}mm ${pageHeight}mm;
+        margin: 0mm !important;
+      }
+      @page :left {
+        margin: 0mm !important;
+      }
+      @page :right {
+        margin: 0mm !important;
+      }
       @media print {
-        @page {
-          size: ${pageWidth}mm ${pageHeight}mm;
-          margin: 0mm;
+        *, *::before, *::after {
+          background: transparent !important;
+          background-color: transparent !important;
+          background-image: none !important;
+          box-shadow: none !important;
+          text-shadow: none !important;
+          filter: none !important;
+          -webkit-print-color-adjust: economy !important;
+          print-color-adjust: economy !important;
         }
-        html, body {
+        html, body, #root {
           width: ${pageWidth}mm !important;
           height: ${pageHeight}mm !important;
+          max-width: ${pageWidth}mm !important;
+          max-height: ${pageHeight}mm !important;
           margin: 0 !important;
           padding: 0 !important;
           background: transparent !important;
+          background-color: transparent !important;
+          background-image: none !important;
+          overflow: hidden !important;
+        }
+        #print-stage {
+          display: block !important;
+          visibility: visible !important;
+          position: absolute !important;
+          top: 0 !important;
+          left: 0 !important;
+          width: ${pageWidth}mm !important;
+          height: ${pageHeight}mm !important;
+          max-width: ${pageWidth}mm !important;
+          max-height: ${pageHeight}mm !important;
+          background: transparent !important;
+          background-color: transparent !important;
+          background-image: none !important;
+          border: none !important;
+          box-shadow: none !important;
+          page-break-after: avoid !important;
+          page-break-before: avoid !important;
+          page-break-inside: avoid !important;
+          break-after: avoid !important;
+          break-before: avoid !important;
+          break-inside: avoid !important;
+          z-index: 999999 !important;
         }
       }
     `;
@@ -278,7 +326,7 @@ export const PhysicalPrintStage: React.FC<PhysicalPrintStageProps> = ({ printDat
                 width: `${fields.acPayeeCrossing.width}mm`,
               }}
             >
-              <div style={{ width: '100%', height: '0.45mm', backgroundColor: '#000' }} />
+              <div style={{ width: '100%', height: 0, borderTop: '0.45mm solid #000' }} />
               <div
                 style={{
                   padding: '1.2mm 0',
@@ -292,7 +340,7 @@ export const PhysicalPrintStage: React.FC<PhysicalPrintStageProps> = ({ printDat
               >
                 {fields.acPayeeCrossing.label || 'A/C PAYEE'}
               </div>
-              <div style={{ width: '100%', height: '0.45mm', backgroundColor: '#000' }} />
+              <div style={{ width: '100%', height: 0, borderTop: '0.45mm solid #000' }} />
             </div>
           </div>
 
@@ -349,8 +397,8 @@ export const PhysicalPrintStage: React.FC<PhysicalPrintStageProps> = ({ printDat
                 <div
                   style={{
                     width: '100%',
-                    height: '0.45mm',
-                    backgroundColor: '#000',
+                    height: 0,
+                    borderTop: '0.45mm solid #000',
                   }}
                 />
                 {/* AC PAYEE Text in the Middle */}
@@ -374,8 +422,8 @@ export const PhysicalPrintStage: React.FC<PhysicalPrintStageProps> = ({ printDat
                 <div
                   style={{
                     width: '100%',
-                    height: '0.45mm',
-                    backgroundColor: '#000',
+                    height: 0,
+                    borderTop: '0.45mm solid #000',
                   }}
                 />
               </div>
@@ -489,8 +537,8 @@ export const PhysicalPrintStage: React.FC<PhysicalPrintStageProps> = ({ printDat
                 left: `${fields.bearerStrike.x + offsetX}mm`,
                 top: `${fields.bearerStrike.y + offsetY}mm`,
                 width: `${fields.bearerStrike.width}mm`,
-                height: '0.4mm',
-                backgroundColor: '#000',
+                height: 0,
+                borderTop: '0.45mm solid #000',
               }}
             />
           )}

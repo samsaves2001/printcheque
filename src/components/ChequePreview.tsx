@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { BankConfig, ChequeTemplate, ChequeRecord, CalibrationProfile } from '../types';
 import { getBoxedDateChars, formatNepaliCurrency } from '../utils/nepaliNumberWords';
 
@@ -10,6 +10,8 @@ export interface ChequePreviewProps {
   cheque?: Partial<ChequeRecord>;
   calibration?: CalibrationProfile | null;
   zoom?: number; // percentage (e.g. 100)
+  autoFit?: boolean; // automatically fit to container width so whole cheque is viewed at once
+  containerWidth?: number;
   showBackground?: boolean; // toggle realistic cheque leaf vs print-only overlay
   showRulers?: boolean;
   showGrid?: boolean;
@@ -25,6 +27,8 @@ export const ChequePreview: React.FC<ChequePreviewProps> = ({
   cheque,
   calibration,
   zoom = 100,
+  autoFit = false,
+  containerWidth,
   showBackground = true,
   showRulers = false,
   showGrid = false,
@@ -33,7 +37,21 @@ export const ChequePreview: React.FC<ChequePreviewProps> = ({
   onSelectField,
   onUpdateFieldCoordinates,
 }) => {
-  const scale = (zoom / 100) * PX_PER_MM;
+  // Base 100% pixel width & height for physical mm dimensions
+  const baseWidthPx = bank.widthMm * PX_PER_MM;
+
+  // Calculate effective zoom: if autoFit is requested, scale to fit the container width
+  const effectiveZoom = useMemo(() => {
+    if (autoFit && containerWidth && containerWidth > 100) {
+      const padding = showRulers ? 52 : 24;
+      const fitRatio = (containerWidth - padding) / baseWidthPx;
+      // Clamp between 30% and 100%
+      return Math.min(100, Math.max(30, Math.round(fitRatio * 100)));
+    }
+    return zoom;
+  }, [autoFit, containerWidth, baseWidthPx, showRulers, zoom]);
+
+  const scale = (effectiveZoom / 100) * PX_PER_MM;
   const canvasWidthPx = bank.widthMm * scale;
   const canvasHeightPx = bank.heightMm * scale;
 
@@ -45,24 +63,30 @@ export const ChequePreview: React.FC<ChequePreviewProps> = ({
   const offsetX = calibration?.offsetX || 0;
   const offsetY = calibration?.offsetY || 0;
 
-  // Amount formatted
-  const formattedFigure = cheque?.amount !== undefined
+  // Amount formatted: clean fresh start without hardcoded demo amounts
+  const formattedFigure = cheque?.amount !== undefined && cheque.amount > 0
     ? `${fields.amountInFigures.prefix || ''}${formatNepaliCurrency(cheque.amount)}${fields.amountInFigures.suffix || ''}`
-    : `${fields.amountInFigures.prefix || '= '}1,25,450.50${fields.amountInFigures.suffix || ' /-'}`;
+    : interactiveMode
+      ? `${fields.amountInFigures.prefix || '= '}1,25,450.50${fields.amountInFigures.suffix || ' /-'}`
+      : '';
 
-  // Amount in words
-  const wordsText = cheque?.amountInWords
+  // Amount in words: clean without hardcoded demo words
+  const wordsText = cheque?.amountInWords && cheque.amountInWords.trim()
     ? `${fields.amountInWords.prefix || ''}${cheque.amountInWords}${fields.amountInWords.suffix || ''}`
-    : `${fields.amountInWords.prefix || '*** '}One Lakh Twenty Five Thousand Four Hundred Fifty Rupees and Fifty Paisa Only${fields.amountInWords.suffix || ' ***'}`;
+    : interactiveMode
+      ? `${fields.amountInWords.prefix || '*** '}One Lakh Twenty Five Thousand Four Hundred Fifty Rupees and Fifty Paisa Only${fields.amountInWords.suffix || ' ***'}`
+      : '';
 
   // Date
-  const dateStr = cheque?.chequeDate || '2026-11-04';
-  const dateChars = getBoxedDateChars(dateStr);
+  const dateStr = cheque?.chequeDate || '';
+  const dateChars = dateStr ? getBoxedDateChars(dateStr) : Array(8).fill('');
 
-  // Payee
-  const payeeText = cheque?.payeeName
+  // Payee: clean without hardcoded demo payee
+  const payeeText = cheque?.payeeName && cheque.payeeName.trim()
     ? `${fields.payee.prefix || ''}${cheque.payeeName}${fields.payee.suffix || ''}`
-    : `${fields.payee.prefix || '*** '}Nepal Electricity Authority${fields.payee.suffix || ' ***'}`;
+    : interactiveMode
+      ? `${fields.payee.prefix || '*** '}SAMPLE RECIPIENT NAME${fields.payee.suffix || ' ***'}`
+      : '';
 
   // Drag handling
   const handleMouseDown = (e: React.MouseEvent, fieldKey: string, currentX: number, currentY: number) => {
@@ -210,13 +234,13 @@ export const ChequePreview: React.FC<ChequePreviewProps> = ({
                     </span>
                   </div>
                   <div className="text-[8px] text-slate-600 pl-5">
-                    {bank.branch || 'Corporate Branch, Kathmandu'}
+                    {bank.branch || 'Branch Office, Nepal'}
                   </div>
-                  {bank.accountNumber && (
+                  {bank.accountNumber ? (
                     <div className="text-[8px] text-slate-600 pl-5 font-mono">
-                      A/C: {bank.accountNumber} ({bank.accountHolderName || 'Office Account'})
+                      A/C: {bank.accountNumber} {bank.accountHolderName ? `(${bank.accountHolderName})` : ''}
                     </div>
-                  )}
+                  ) : null}
                 </div>
               </div>
 
@@ -352,9 +376,9 @@ export const ChequePreview: React.FC<ChequePreviewProps> = ({
               <div
                 className="absolute bottom-0 inset-x-0 h-4 bg-slate-100/90 border-t border-slate-300 flex items-center justify-center gap-6 font-mono text-[9px] text-slate-600 tracking-widest"
               >
-                <span>⑈{cheque?.chequeNumber || '00481922'}⑈</span>
+                <span>⑈{cheque?.chequeNumber ? cheque.chequeNumber : '      '}⑈</span>
                 <span>446002010⑆</span>
-                <span>01100175029481⑈ 10</span>
+                <span>{bank.accountNumber ? `${bank.accountNumber}⑈ 10` : '⑈ 10'}</span>
               </div>
             </div>
           )}
@@ -417,7 +441,7 @@ export const ChequePreview: React.FC<ChequePreviewProps> = ({
                   style={{
                     padding: `${1.2 * scale}px 0`,
                     fontFamily: fields.acPayeeCrossing.fontFamily,
-                    fontSize: `${fields.acPayeeCrossing.fontSize * (zoom / 100) * 1.15}px`,
+                    fontSize: `${fields.acPayeeCrossing.fontSize * (effectiveZoom / 100) * 1.15}px`,
                     lineHeight: 1,
                     whiteSpace: 'nowrap',
                   }}
@@ -447,7 +471,7 @@ export const ChequePreview: React.FC<ChequePreviewProps> = ({
                 width: `${fields.date.width * scale}px`,
                 height: `${(fields.date.height || 6.5) * scale}px`,
                 fontFamily: fields.date.fontFamily,
-                fontSize: `${fields.date.fontSize * (zoom / 100) * 1.25}px`,
+                fontSize: `${fields.date.fontSize * (effectiveZoom / 100) * 1.25}px`,
                 fontWeight: fields.date.fontWeight,
                 color: '#0f172a',
                 display: 'flex',
@@ -494,7 +518,7 @@ export const ChequePreview: React.FC<ChequePreviewProps> = ({
                 top: `${(fields.payee.y + offsetY) * scale}px`,
                 width: `${fields.payee.width * scale}px`,
                 fontFamily: fields.payee.fontFamily,
-                fontSize: `${fields.payee.fontSize * (zoom / 100) * 1.3}px`,
+                fontSize: `${fields.payee.fontSize * (effectiveZoom / 100) * 1.3}px`,
                 fontWeight: fields.payee.fontWeight,
                 textAlign: fields.payee.align,
                 color: '#0f172a',
@@ -507,7 +531,11 @@ export const ChequePreview: React.FC<ChequePreviewProps> = ({
                 }
               }}
             >
-              {payeeText}
+              {payeeText || (showBackground ? (
+                <span className="text-slate-300 italic text-[11px] font-normal tracking-normal select-none">
+                  [ Payee Name / भुक्तानी पाउने व्यक्ति वा संस्था ]
+                </span>
+              ) : null)}
             </div>
           )}
 
@@ -524,7 +552,7 @@ export const ChequePreview: React.FC<ChequePreviewProps> = ({
                 top: `${(fields.amountInWords.y + offsetY) * scale}px`,
                 width: `${fields.amountInWords.width * scale}px`,
                 fontFamily: fields.amountInWords.fontFamily,
-                fontSize: `${fields.amountInWords.fontSize * (zoom / 100) * 1.25}px`,
+                fontSize: `${fields.amountInWords.fontSize * (effectiveZoom / 100) * 1.25}px`,
                 fontWeight: fields.amountInWords.fontWeight,
                 textAlign: fields.amountInWords.align,
                 lineHeight: fields.amountInWords.lineHeight || 1.45,
@@ -539,7 +567,11 @@ export const ChequePreview: React.FC<ChequePreviewProps> = ({
                 }
               }}
             >
-              {wordsText}
+              {wordsText || (showBackground ? (
+                <span className="text-slate-300 italic text-[11px] font-normal tracking-normal select-none">
+                  [ Amount in words will appear here (रुपैयाँ र पैसा अक्षरमा) ]
+                </span>
+              ) : null)}
             </div>
           )}
 
@@ -556,7 +588,7 @@ export const ChequePreview: React.FC<ChequePreviewProps> = ({
                 top: `${(fields.amountInFigures.y + offsetY) * scale}px`,
                 width: `${fields.amountInFigures.width * scale}px`,
                 fontFamily: fields.amountInFigures.fontFamily,
-                fontSize: `${fields.amountInFigures.fontSize * (zoom / 100) * 1.35}px`,
+                fontSize: `${fields.amountInFigures.fontSize * (effectiveZoom / 100) * 1.35}px`,
                 fontWeight: fields.amountInFigures.fontWeight,
                 textAlign: fields.amountInFigures.align,
                 color: '#0f172a',
@@ -569,7 +601,11 @@ export const ChequePreview: React.FC<ChequePreviewProps> = ({
                 }
               }}
             >
-              {formattedFigure}
+              {formattedFigure || (showBackground ? (
+                <span className="text-slate-300 italic text-[11px] font-mono font-normal tracking-normal select-none">
+                  = 0.00 /-
+                </span>
+              ) : null)}
             </div>
           )}
 
@@ -611,7 +647,7 @@ export const ChequePreview: React.FC<ChequePreviewProps> = ({
                 top: `${(fields.signatory.y + offsetY) * scale}px`,
                 width: `${fields.signatory.width * scale}px`,
                 fontFamily: fields.signatory.fontFamily,
-                fontSize: `${fields.signatory.fontSize * (zoom / 100) * 1.15}px`,
+                fontSize: `${fields.signatory.fontSize * (effectiveZoom / 100) * 1.15}px`,
                 fontWeight: fields.signatory.fontWeight,
                 textAlign: fields.signatory.align,
                 color: '#0f172a',
@@ -624,7 +660,7 @@ export const ChequePreview: React.FC<ChequePreviewProps> = ({
                 }
               }}
             >
-              {fields.signatory.label || 'For Apex Accounting'}
+              {fields.signatory.label || ''}
             </div>
           )}
 
@@ -641,7 +677,7 @@ export const ChequePreview: React.FC<ChequePreviewProps> = ({
                 top: `${(fields.memo.y + offsetY) * scale}px`,
                 width: `${fields.memo.width * scale}px`,
                 fontFamily: fields.memo.fontFamily,
-                fontSize: `${fields.memo.fontSize * (zoom / 100) * 1.1}px`,
+                fontSize: `${fields.memo.fontSize * (effectiveZoom / 100) * 1.1}px`,
                 fontWeight: fields.memo.fontWeight,
                 textAlign: fields.memo.align,
                 color: '#334155',
@@ -654,7 +690,7 @@ export const ChequePreview: React.FC<ChequePreviewProps> = ({
                 }
               }}
             >
-              {fields.memo.prefix || 'Ref: '}{cheque?.memo || 'Sample Memo Description'}
+              {fields.memo.prefix || 'Ref: '}{cheque?.memo || (interactiveMode ? 'Sample Memo' : '')}
             </div>
           )}
         </div>

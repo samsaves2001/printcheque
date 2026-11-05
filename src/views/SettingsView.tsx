@@ -111,11 +111,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setTimeout(() => setSaveSuccessMsg(null), 3000);
   };
 
-  // Execute reset to sample
+  // Execute reset to fresh clean start
   const handleExecuteResetSample = async () => {
-    if (confirm('Reset application database to initial factory defaults and sample Nepali banks?')) {
+    if (confirm('Reset application to a clean fresh start? This will clear all cheques and payees while preserving standard Nepali bank templates and configurations.')) {
       await onResetSampleData();
-      setSaveSuccessMsg('Application restored to factory presets.');
+      setSaveSuccessMsg('Application reset to clean fresh start.');
       setTimeout(() => setSaveSuccessMsg(null), 3000);
     }
   };
@@ -353,7 +353,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg shadow-xs cursor-pointer"
             >
               <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
-              <span>Restore Factory Sample Data</span>
+              <span>Reset to Clean Fresh Start</span>
             </button>
 
             <button
